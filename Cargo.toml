@@ -1,0 +1,19 @@
+[package]
+name = "npm-compromised-scan"
+version = "0.1.0"
+edition = "2021"
+description = "Scan npm dependency tree against a list of compromised packages."
+license = "MIT"
+repository = "https://github.com/JockByTheSea/npm-compromise-scan"
+
+[dependencies]
+clap = { version = "4.5.4", features = ["derive"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+anyhow = "1.0"
+thiserror = "1.0"
+
+[profile.release]
+codegen-units = 1
+lto = true
+strip = "symbols"
