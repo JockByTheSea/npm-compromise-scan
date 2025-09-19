@@ -1,6 +1,6 @@
 [package]
 name = "npm-compromised-scan"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 description = "Scan npm dependency tree against a list of compromised packages."
 license = "MIT"
