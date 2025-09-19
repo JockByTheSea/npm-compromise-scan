@@ -97,7 +97,7 @@ jobs:
           BIN_PATH="target/${{ matrix.target }}/release/${BINARY_NAME}"
           RELEASE_DIR="${BINARY_NAME}-${{ env.TAG_NAME }}-${{ matrix.target }}"
           mkdir -p "$RELEASE_DIR"
-          cp LICENSE README.md "$BIN_PATH" "$RELEASE_DIR"/ 2>/dev/null || true
+          cp README.md "$BIN_PATH" "$RELEASE_DIR"/ 2>/dev/null || true
           if [[ "${{ matrix.target }}" == *windows* ]]; then
             mv "$RELEASE_DIR/${BINARY_NAME}" "$RELEASE_DIR/${BINARY_NAME}.exe"
           fi
