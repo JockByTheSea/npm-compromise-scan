@@ -81,12 +81,12 @@ jobs:
           cargo build --release --target ${{ matrix.target }}
 
       - name: Strip (if possible)
-        if: env.STRIP == 'true'
+        if: env.STRIP == 'true' && runner.os != 'Windows'
         run: |
           case "${{ matrix.target }}" in
             *linux*|*darwin*)
-              strip target/${{ matrix.target }}/release/${BINARY_NAME} || true
-              ;;
+            strip target/${{ matrix.target }}/release/${BINARY_NAME} || true
+            ;;
             *) echo "Skipping strip for ${{ matrix.target }}" ;;
           esac
 
