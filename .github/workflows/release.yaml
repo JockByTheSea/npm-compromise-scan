@@ -99,7 +99,9 @@ jobs:
           mkdir -p "$RELEASE_DIR"
           cp README.md "$BIN_PATH" "$RELEASE_DIR"/ 2>/dev/null || true
           if [[ "${{ matrix.target }}" == *windows* ]]; then
-            mv "$RELEASE_DIR/${BINARY_NAME}" "$RELEASE_DIR/${BINARY_NAME}.exe"
+            if [[ -f "$RELEASE_DIR/${BINARY_NAME}" && ! -f "$RELEASE_DIR/${BINARY_NAME}.exe" ]]; then
+              mv "$RELEASE_DIR/${BINARY_NAME}" "$RELEASE_DIR/${BINARY_NAME}.exe"
+            fi
           fi
           if [ "${{ matrix.archive }}" = "zip" ]; then
             zip -r "${RELEASE_DIR}.zip" "$RELEASE_DIR"
