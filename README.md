@@ -18,13 +18,29 @@ A small Rust CLI tool to scan your current project's npm dependency tree against
 - Can read pre-generated npm JSON (`--npm-json file` or `--npm-json -` for stdin).
 - Ignores comments (`# ...`) and blank lines.
 
-## Install
+## Installation
+
+Download a binary from [Releases](https://github.com/OWNER/REPO/releases) matching your platform, then:
+
+Linux/macOS:
 
 ```bash
-cargo build --release
+tar xzf npm-compromised-scan-v0.2.0-x86_64-unknown-linux-gnu.tar.gz
+sudo mv npm-compromised-scan /usr/local/bin/
 ```
 
-Binary will be at `target/release/npm-compromised-scan`.
+Windows (PowerShell):
+
+```powershell
+Expand-Archive .\npm-compromised-scan-v0.2.0-x86_64-pc-windows-msvc.zip
+Move-Item .\npm-compromised-scan.exe -Destination "C:\Program Files\npm-compromised-scan\npm-compromised-scan.exe"
+```
+
+Verify checksum:
+
+```bash
+shasum -a 256 -c npm-compromised-scan-v0.2.0-x86_64-unknown-linux-gnu.tar.gz.sha256
+```
 
 ## Usage
 
