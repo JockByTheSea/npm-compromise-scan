@@ -116,14 +116,19 @@ jobs:
             echo "archive_name=${RELEASE_DIR}.tar.gz" >> $GITHUB_ENV
           fi
 
-      - name: Compute checksum
+      - name: Compute checksum (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          archive_name: ${{ env.archive_name }}
+        run: |
+          Get-FileHash "${env:archive_name}" -Algorithm SHA256 | ForEach-Object { $_.Hash } | Set-Content "${env:archive_name}.sha256"
+
+      - name: Compute checksum (non-Windows)
+        if: runner.os != 'Windows'
         shell: bash
         run: |
-          if [[ "$RUNNER_OS" == "Windows" ]]; then
-                powershell Get-FileHash "$archive_name" -Algorithm SHA256 | Out-File -Encoding ascii "$archive_name.sha256"
-              else
-                shasum -a 256 "$archive_name" > "$archive_name.sha256"
-              fi
+          shasum -a 256 "$archive_name" > "$archive_name.sha256"
         env:
           archive_name: ${{ env.archive_name }}
 
