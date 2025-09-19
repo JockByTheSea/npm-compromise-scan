@@ -167,5 +167,5 @@ jobs:
     uses: JockByTheSea/npm-compromise-scan/.github/workflows/release.yaml@main
     with:
       tag_name: ${{ needs.tag.outputs.tag }}
-      prerelease: ${{ needs.tag.outputs.prerelease }}
+      prerelease: ${{ needs.tag.outputs.prerelease == 'true' }}
     secrets: inherit
