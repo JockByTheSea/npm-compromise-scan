@@ -1,6 +1,17 @@
 name: Release
 
 on:
+  workflow_call:
+    inputs:
+      tag_name:
+        description: "Tag to release (e.g., v0.2.0)"
+        required: true
+        type: string
+      prerelease:
+        description: "Mark the GitHub Release as a prerelease"
+        required: false
+        default: false
+        type: boolean
   push:
     tags:
       - "v*"
@@ -35,15 +46,15 @@ jobs:
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             archive: zip
-
     env:
       BINARY_NAME: npm-compromised-scan
       STRIP: "true"
-      TAG_NAME: ${{ github.ref_name }}
-
+      TAG_NAME: ${{ inputs.tag_name != '' && inputs.tag_name || github.ref_name }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag_name != '' && inputs.tag_name || github.ref_name }}
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -127,18 +138,16 @@ jobs:
         run: |
           cd dist
           cat */*.sha256 > SHASUMS256.txt
-          # Flatten archives to dist root
           find . -type f \( -name "*.tar.gz" -o -name "*.zip" \) -exec cp {} . \;
           find . -type f -name "*.sha256" -exec cp {} . \;
 
-      - name: Create GitHub Release
+      - name: Create/Update GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name }}
-          name: ${{ github.ref_name }}
+          tag_name: ${{ inputs.tag_name != '' && inputs.tag_name || github.ref_name }}
+          name: ${{ inputs.tag_name != '' && inputs.tag_name || github.ref_name }}
           draft: false
-          # Mark prerelease automatically if tag contains a prerelease segment (e.g., -rc.1)
-          prerelease: ${{ contains(github.ref_name, '-') }}
+          prerelease: ${{ contains(inputs.tag_name, '-') || contains(github.ref_name, '-') }}
           files: |
             dist/*.tar.gz
             dist/*.zip
