@@ -147,7 +147,7 @@ jobs:
           git push origin "v${NEW_VER}" || true
 
       - name: Call release workflow directly
-        uses: ./.github/workflows/release.yml
+        uses: JockByTheSea/npm-compromise-scan/.github/workflows/release.yml@main
         with:
           tag_name: v${{ env.NEW_VER }}
           prerelease: ${{ contains(env.NEW_VER, '-') }}
