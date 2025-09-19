@@ -145,3 +145,9 @@ jobs:
           git tag -a "v${NEW_VER}" -m "Release v${NEW_VER}" || echo "Tag v${NEW_VER} already exists"
           git push origin "${{ steps.base.outputs.name }}"
           git push origin "v${NEW_VER}" || true
+
+      - name: Call release workflow directly
+        uses: ./.github/workflows/release.yml
+        with:
+          tag_name: v${{ env.NEW_VER }}
+          prerelease: ${{ contains(env.NEW_VER, '-') }}
