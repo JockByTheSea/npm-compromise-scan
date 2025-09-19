@@ -119,7 +119,11 @@ jobs:
       - name: Compute checksum
         shell: bash
         run: |
-          shasum -a 256 "$archive_name" > "$archive_name.sha256"
+          if [[ "$RUNNER_OS" == "Windows" ]]; then
+            powershell Get-FileHash <file> -Algorithm SHA256
+          else
+            shasum -a 256 <file>
+          fi
         env:
           archive_name: ${{ env.archive_name }}
 
