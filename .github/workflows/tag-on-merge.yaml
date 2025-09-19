@@ -1,0 +1,147 @@
+name: Tag on PR merge
+
+on:
+  pull_request:
+    types: [closed]
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: "Bump type (ignored if 'version' is set)"
+        type: choice
+        required: false
+        options: [patch, minor, major]
+        default: patch
+      version:
+        description: "Exact version to set (e.g. 0.2.0). If provided, overrides bump."
+        type: string
+        required: false
+
+permissions:
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: tag-on-merge-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    name: Bump version and create tag
+    runs-on: ubuntu-latest
+    # Only run when PR is merged, or when manually dispatched
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.merged == true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Determine base branch
+        id: base
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "name=${{ github.event.pull_request.base.ref }}" >> "$GITHUB_OUTPUT"
+            echo "merge_sha=${{ github.event.pull_request.merge_commit_sha }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "name=main" >> "$GITHUB_OUTPUT"
+            echo "merge_sha=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Ensure we are on the base branch
+        run: |
+          git checkout "${{ steps.base.outputs.name }}"
+          git pull --ff-only origin "${{ steps.base.outputs.name }}"
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-edit
+        run: cargo install cargo-edit --locked
+
+      - name: Determine bump from Conventional Commits
+        id: conv
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --tags --force --prune || true
+          last_tag="$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || true)"
+          # If we have a merge commit SHA from the PR, analyze up to that; otherwise use HEAD
+          target="${{ steps.base.outputs.merge_sha }}"
+          if [ -z "$target" ]; then target="HEAD"; fi
+
+          if [ -n "$last_tag" ]; then
+            range="${last_tag}..${target}"
+          else
+            range="${target}"
+          fi
+
+          commits="$(git log --format='%s%n%b' ${range})"
+          bump="none"
+
+          # Major if BREAKING CHANGE footer present
+          if printf '%s\n' "$commits" | grep -Eiq '(^|[[:space:]])BREAKING CHANGE'; then
+            bump="major"
+          fi
+          # Major if '!' after type in header
+          if [ "$bump" = "none" ] && printf '%s\n' "$commits" | grep -Eiq '^[a-zA-Z]+(\([^)]+\))?!: '; then
+            bump="major"
+          fi
+          # Minor if any feat commits
+          if [ "$bump" = "none" ] && printf '%s\n' "$commits" | grep -Eiq '^feat(\([^)]+\))?: '; then
+            bump="minor"
+          fi
+          # Patch if fix/perf/refactor/revert
+          if [ "$bump" = "none" ] && printf '%s\n' "$commits" | grep -Eiq '^(fix|perf|refactor|revert)(\([^)]+\))?: '; then
+            bump="patch"
+          fi
+          # Default to patch
+          if [ "$bump" = "none" ]; then bump="patch"; fi
+
+          echo "bump=$bump" >> "$GITHUB_OUTPUT"
+          echo "last_tag=$last_tag" >> "$GITHUB_OUTPUT"
+
+      - name: Decide bump type or exact version
+        id: decide_bump
+        shell: bash
+        run: |
+          # 1) Manual exact version (workflow_dispatch)
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ inputs.version }}" ]; then
+            echo "mode=exact" >> "$GITHUB_OUTPUT"
+            echo "value=${{ inputs.version }}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # 2) Manual bump (workflow_dispatch)
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ inputs.bump }}" ]; then
+            echo "mode=bump" >> "$GITHUB_OUTPUT"
+            echo "value=${{ inputs.bump }}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # 3) Conventional Commits auto-detection
+          echo "mode=bump" >> "$GITHUB_OUTPUT"
+          echo "value=${{ steps.conv.outputs.bump }}" >> "$GITHUB_OUTPUT"
+
+      - name: Bump Cargo.toml version
+        run: |
+          set -euo pipefail
+          if [ "${{ steps.decide_bump.outputs.mode }}" = "exact" ]; then
+            cargo set-version "${{ steps.decide_bump.outputs.value }}"
+          else
+            cargo set-version --bump "${{ steps.decide_bump.outputs.value }}"
+          fi
+          NEW_VER=$(sed -n 's/^version\s*=\s*"\(.*\)"/\1/p' Cargo.toml | head -n1)
+          echo "NEW_VER=$NEW_VER" >> $GITHUB_ENV
+
+      - name: Commit version bump and tag
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Cargo.toml Cargo.lock
+          git commit -m "Release v${NEW_VER}" || echo "Nothing to commit (version may already be ${NEW_VER})"
+          git tag -a "v${NEW_VER}" -m "Release v${NEW_VER}" || echo "Tag v${NEW_VER} already exists"
+          git push origin "${{ steps.base.outputs.name }}"
+          git push origin "v${NEW_VER}" || true

@@ -1,0 +1,148 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            archive: tar.gz
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            archive: tar.gz
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            archive: tar.gz
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            archive: tar.gz
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            archive: zip
+
+    env:
+      BINARY_NAME: npm-compromised-scan
+      STRIP: "true"
+      TAG_NAME: ${{ github.ref_name }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install musl tools (if needed)
+        if: matrix.target == 'x86_64-unknown-linux-musl'
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-${{ matrix.target }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.target }}-cargo-
+
+      - name: Build
+        run: |
+          cargo build --release --target ${{ matrix.target }}
+
+      - name: Strip (if possible)
+        if: env.STRIP == 'true'
+        run: |
+          case "${{ matrix.target }}" in
+            *linux*|*darwin*)
+              strip target/${{ matrix.target }}/release/${BINARY_NAME} || true
+              ;;
+            *) echo "Skipping strip for ${{ matrix.target }}" ;;
+          esac
+
+      - name: Prepare archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          BIN_PATH="target/${{ matrix.target }}/release/${BINARY_NAME}"
+          RELEASE_DIR="${BINARY_NAME}-${{ env.TAG_NAME }}-${{ matrix.target }}"
+          mkdir -p "$RELEASE_DIR"
+          cp LICENSE README.md "$BIN_PATH" "$RELEASE_DIR"/ 2>/dev/null || true
+          if [[ "${{ matrix.target }}" == *windows* ]]; then
+            mv "$RELEASE_DIR/${BINARY_NAME}" "$RELEASE_DIR/${BINARY_NAME}.exe"
+          fi
+          if [ "${{ matrix.archive }}" = "zip" ]; then
+            zip -r "${RELEASE_DIR}.zip" "$RELEASE_DIR"
+            echo "archive_name=${RELEASE_DIR}.zip" >> $GITHUB_ENV
+          else
+            tar czf "${RELEASE_DIR}.tar.gz" "$RELEASE_DIR"
+            echo "archive_name=${RELEASE_DIR}.tar.gz" >> $GITHUB_ENV
+          fi
+
+      - name: Compute checksum
+        shell: bash
+        run: |
+          shasum -a 256 "$archive_name" > "$archive_name.sha256"
+        env:
+          archive_name: ${{ env.archive_name }}
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.archive_name }}
+          path: |
+            ${{ env.archive_name }}
+            ${{ env.archive_name }}.sha256
+
+  publish:
+    name: Publish Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Aggregate checksums
+        run: |
+          cd dist
+          cat */*.sha256 > SHASUMS256.txt
+          # Flatten archives to dist root
+          find . -type f \( -name "*.tar.gz" -o -name "*.zip" \) -exec cp {} . \;
+          find . -type f -name "*.sha256" -exec cp {} . \;
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          draft: false
+          # Mark prerelease automatically if tag contains a prerelease segment (e.g., -rc.1)
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          files: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/*.sha256
+            dist/SHASUMS256.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
