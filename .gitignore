@@ -1,0 +1,31 @@
+# Build artifacts
+/target/
+
+# Release bundles (if you generate tar/zip outside of CI)
+dist/
+*.tar.gz
+*.zip
+
+# IDE / Editor
+.idea/
+.vscode/
+*.iml
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Logs / misc
+*.log
+
+# Rust / tooling
+# (Keep Cargo.lock for binaries!)
+# Cargo.lock  <-- DO NOT uncomment for a binary project
+
+# If you add benches or fuzzing:
+# /fuzz/target/
+# /fuzz/corpus/
+# /fuzz/artifacts/
+
+# If using justfile or other local helpers:
+# .env
